@@ -1,1 +1,1 @@
-# platform_iopc_qemu64
+# platform_iopc_vpb
