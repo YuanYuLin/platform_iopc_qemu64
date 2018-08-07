@@ -5,6 +5,7 @@ import pprint
 import sys
 import ConfigParser
 import binascii
+import json
 
 '''
 [Boot disk layout]
@@ -65,23 +66,78 @@ def out_to_c(buff, record_count, record_format):
     for rec in buff:
         csum, tp, kl, vl, rsv, data = struct.unpack(record_format, rec)
         ft.write('\n' + '{')
+        ft.write('.hdr = {')
+        ft.write('.chksum = ')
         ft.write(str(int(csum)))
         ft.write(',')
+        ft.write('.type = ')
         ft.write(str(int(tp)))
         ft.write(',')
+        ft.write('.key_len = ')
         ft.write(str(int(kl)))
         ft.write(',')
+        ft.write('.val_len = ')
         ft.write(str(int(vl)))
         ft.write(',')
+        ft.write('.resv = ')
         ft.write(str(int(rsv)))
-        ft.write(',{')
+        ft.write('},')
+        ft.write('.data = {')
         for ch in bytearray(data):
             ft.write(str(int(ch)))
             ft.write(',')
-        ft.write('},')
+        ft.write('}')
         ft.write('},')
     ft.write('};')
     ft.close()
+
+def head_to_binary(pack):
+    data = bytearray('\0' * 64)
+    idx = 0
+    for ch in bytearray(pack):
+        data[idx] = ch
+        idx += 1
+    return data
+
+def size_to_bytes(size_str):
+    val = 0
+    if size_str[-1:] == 'B':
+        val = int(size_str[0:-1])
+    elif size_str[-1:] == '%':
+        val = 0xFFFFFFFF
+    return val
+
+def create_header(layout_obj):
+    header = bytearray('\0' * (64 *1024))
+    buffers = []
+    version = 1
+    table_type = str(layout_obj["table_type"])
+    platform = str(layout_obj["platform"])
+    platform_id = layout_obj["platform_id"]
+    print table_type, platform, platform_id
+    pack = struct.pack("12sI20sI12s", "$[IOPCHEAD]$".ljust(12), version, platform.ljust(20), platform_id, table_type.ljust(12))
+    buffers.append(head_to_binary(pack))
+    for part in layout_obj["parts"]:
+        obj = layout_obj[part]
+        part_name = str(part)
+        boot=obj["boot"]
+        fstype = str(obj["fstype"])
+        start = size_to_bytes(obj["start"])
+        end = size_to_bytes(obj["end"])
+
+        bin_file = obj["bin_files"]
+        pack = struct.pack("12s10s10sQQB", "$[IOPCREC]$".ljust(12), part_name.ljust(10), fstype.ljust(10), start, end, boot)
+        buffers.append(head_to_binary(pack))
+
+    pack = struct.pack("12sI20sI12s", "$[IOPCEND]$".ljust(12), version, platform.ljust(20), platform_id, table_type.ljust(12))
+    buffers.append(head_to_binary(pack))
+    idx = 0
+    for sec in buffers:
+        for ch in sec:
+            header[idx]=ch
+            idx+=1
+
+    return header
 
 def help():
     print "usage: dao.py <dao.ini>"
@@ -111,3 +167,11 @@ if __name__ == '__main__':
     buf=dao_to_buffer(dao, buf, record_format, data_size)
     out_to_binary(buf)
     out_to_c(buf, record_count, record_format)
+
+    layout = config.get('CFG_IMAGE', 'layout')
+    layout_obj  = json.loads(layout)
+    header_bin = create_header(layout_obj)
+    fd=open('img_header.bin', 'wb')
+    fd.write(header_bin)
+    fd.close()
+
