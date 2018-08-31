@@ -7,7 +7,6 @@ arch = ""
 output_platform_dir = ""
 src_image_cfg = ""
 dao_file = "dao.ini"
-dao_script = "dao.py"
 
 def set_global(args):
     global pkg_path
@@ -16,12 +15,14 @@ def set_global(args):
     global src_image_cfg
     global output_platform_dir
     global install_platform_dao
+    global dao_script
 
     pkg_path = args["pkg_path"]
     output_dir = args["output_path"]
     arch = ops.getEnv("ARCH_ALT")
     src_image_cfg = ops.path_join(pkg_path, dao_file)
     output_platform_dir = ops.path_join(iopc.getOutputRootDir(), "platform")
+    dao_script = ops.path_join(output_platform_dir, "dao.py")
 
     install_platform_dao = False
     if ops.getEnv("INSTALL_PLATFORM_DAO") == 'y' :
@@ -35,9 +36,7 @@ def MAIN_ENV(args):
 def MAIN_EXTRACT(args):
     set_global(args)
 
-    ops.mkdir(output_platform_dir)
     ops.copyto(src_image_cfg, ops.path_join(output_platform_dir, dao_file))
-    ops.copyto(ops.path_join(pkg_path, dao_script), output_dir)
     ops.copyto(ops.path_join(pkg_path, dao_file), output_dir)
 
     return True
